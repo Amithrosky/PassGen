@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en" class="antialiased">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Password Generator</title>
+    
+    <!-- Fonts: Inter for UI, Fira Code for Password Display -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS (via CDN for single-file requirement) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Tailwind Config for Custom Colors/Fonts -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom Styles & Micro-interactions */
+        body {
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        
+        input[type=range]:focus {
+            outline: none;
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: var(--track-bg, #cbd5e1);
+            border-radius: 999px;
+            transition: background 0.2s;
+        }
+
+        .dark input[type=range]::-webkit-slider-runnable-track {
+            background: var(--track-bg, #334155);
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #2563eb;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.2);
+        }
+
+        /* Custom Checkbox styles */
+        .custom-checkbox {
+            appearance: none;
+            width: 1.25rem;
+            height: 1.25rem;
+            border: 2px solid #cbd5e1;
+            border-radius: 0.375rem;
+            outline: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        
+        .dark .custom-checkbox {
+            border-color: #475569;
+            background-color: #1e293b;
+        }
+
+        .custom-checkbox:checked {
+            background-color: #2563eb;
+            border-color: #2563eb;
+        }
+
+        .custom-checkbox:checked::after {
+            content: '';
+            position: absolute;
+            width: 0.35rem;
+            height: 0.6rem;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+            margin-top: -2px;
+        }
+
+        .custom-checkbox:focus-visible {
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.4);
+        }
+
+        .checkbox-shake {
+            animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+            border-color: #ef4444 !important;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        /* Toast Animation */
+        .toast-enter {
+            opacity: 0;
+            transform: translateY(1rem);
+        }
+        .toast-enter-active {
+            opacity: 1;
+            transform: translateY(0);
+            transition: opacity 300ms, transform 300ms;
+        }
+        .toast-exit {
+            opacity: 1;
+        }
+        .toast-exit-active {
+            opacity: 0;
+            transition: opacity 300ms;
+        }
+        
+        /* Strength bar transition */
+        .strength-bar {
+            transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.4s ease;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex flex-col items-center justify-center p-4 sm:p-8">
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <main class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        
+        <!-- Header -->
+        <header class="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-2 text-brand-600 dark:text-brand-500">
+                <i data-lucide="shield-check" class="w-6 h-6"></i>
+                <h1 class="font-bold text-lg tracking-tight">KeyForge</h1>
+            </div>
+            <button id="themeToggle" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-500 dark:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500" aria-label="Toggle Dark Mode">
+                <i data-lucide="moon" id="moonIcon" class="w-5 h-5 hidden dark:block"></i>
+                <i data-lucide="sun" id="sunIcon" class="w-5 h-5 block dark:hidden"></i>
+            </button>
+        </header>
+
+        <div class="p-6 space-y-8">
+            
+            <!-- Password Display -->
+            <section class="space-y-3">
+                <div class="relative group">
+                    <div class="flex items-center justify-between bg-slate-100 dark:bg-slate-950 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 focus-within:ring-2 focus-within:ring-brand-500 transition-all">
+                        <input type="text" id="passwordOutput" readonly 
+                            class="w-full bg-transparent font-mono text-xl sm:text-2xl tracking-wider text-slate-800 dark:text-slate-100 focus:outline-none break-all" 
+                            aria-label="Generated Password">
+                        
+                        <div class="flex items-center gap-2 pl-4 border-l border-slate-300 dark:border-slate-700 ml-2">
+                            <button id="btnRegenerate" class="p-2 text-slate-400 hover:text-brand-600 dark:hover:text-brand-500 transition-colors tooltip" aria-label="Generate New Password">
+                                <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                            </button>
+                            <button id="btnCopy" class="p-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl shadow-sm transition-all hover:-translate-y-0.5 active:translate-y-0" aria-label="Copy to Clipboard">
+                                <i data-lucide="copy" class="w-5 h-5" id="copyIcon"></i>
+                                <i data-lucide="check" class="w-5 h-5 hidden" id="checkIcon"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Strength Indicator -->
+                <div class="px-1 flex items-center gap-4">
+                    <div class="flex-1 h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div id="strengthBar" class="h-full strength-bar w-0 bg-red-500 rounded-full"></div>
+                    </div>
+                    <span id="strengthLabel" class="text-sm font-semibold uppercase tracking-wider text-slate-500 w-24 text-right">Weak</span>
+                </div>
+            </section>
+
+            <hr class="border-slate-100 dark:border-slate-800">
+
+            <!-- Controls -->
+            <section class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                
+                <!-- Left Column: Length & Char Types -->
+                <div class="space-y-6">
+                    <!-- Length -->
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <label for="lengthSlider" class="text-sm font-medium">Password Length</label>
+                            <input type="number" id="lengthInput" min="4" max="64" value="16" 
+                                class="w-16 text-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg py-1 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono">
+                        </div>
+                        <input type="range" id="lengthSlider" min="4" max="64" value="16" class="w-full">
+                    </div>
+
+                    <!-- Character Types -->
+                    <div class="space-y-3">
+                        <h3 class="text-sm font-medium text-slate-500 dark:text-slate-400">Character Types</h3>
+                        
+                        <label class="flex items-center gap-3 cursor-pointer group">
+                            <input type="checkbox" id="chkUpper" class="custom-checkbox char-type-chk" checked>
+                            <span class="text-sm group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">Uppercase (A-Z)</span>
+                        </label>
+                        
+                        <label class="flex items-center gap-3 cursor-pointer group">
+                            <input type="checkbox" id="chkLower" class="custom-checkbox char-type-chk" checked>
+                            <span class="text-sm group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">Lowercase (a-z)</span>
+                        </label>
+                        
+                        <label class="flex items-center gap-3 cursor-pointer group">
+                            <input type="checkbox" id="chkNumbers" class="custom-checkbox char-type-chk" checked>
+                            <span class="text-sm group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">Numbers (0-9)</span>
+                        </label>
+                        
+                        <label class="flex items-center gap-3 cursor-pointer group">
+                            <input type="checkbox" id="chkSymbols" class="custom-checkbox char-type-chk" checked>
+                            <span class="text-sm group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">Symbols (!@#$...)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Right Column: Advanced Options -->
+                <div class="space-y-4">
+                    <h3 class="text-sm font-medium text-slate-500 dark:text-slate-400">Advanced Options</h3>
+                    
+                    <label class="flex items-start gap-3 cursor-pointer group">
+                        <input type="checkbox" id="chkExcludeAmbiguous" class="custom-checkbox mt-0.5">
+                        <div class="flex flex-col">
+                            <span class="text-sm group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">Exclude Ambiguous</span>
+                            <span class="text-xs text-slate-500 dark:text-slate-400 mt-1">Removes l, 1, I, O, 0 to prevent reading mistakes.</span>
+                        </div>
+                    </label>
+
+                    <label class="flex items-start gap-3 cursor-pointer group">
+                        <input type="checkbox" id="chkExcludeDuplicates" class="custom-checkbox mt-0.5">
+                        <div class="flex flex-col">
+                            <span class="text-sm group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">Exclude Duplicates</span>
+                            <span class="text-xs text-slate-500 dark:text-slate-400 mt-1">Characters will only appear once.</span>
+                            <span id="duplicateWarning" class="text-xs text-amber-500 mt-1 hidden font-medium">Pool size too small for current length!</span>
+                        </div>
+                    </label>
+
+                    <label class="flex items-start gap-3 cursor-pointer group">
+                        <input type="checkbox" id="chkGuarantee" class="custom-checkbox mt-0.5" checked>
+                        <div class="flex flex-col">
+                            <span class="text-sm group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">Guarantee Types</span>
+                            <span class="text-xs text-slate-500 dark:text-slate-400 mt-1">Ensure at least one character from every selected type is included.</span>
+                        </div>
+                    </label>
+                </div>
+            </section>
+        </div>
+
+        <!-- History Section (Session Only) -->
+        <div class="bg-slate-50 dark:bg-slate-950/50 border-t border-slate-100 dark:border-slate-800 p-6">
+            <h3 class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2">
+                <i data-lucide="history" class="w-4 h-4"></i> Session History
+            </h3>
+            <ul id="historyList" class="space-y-2">
+                <!-- History items injected here -->
+                <li class="text-sm text-slate-400 dark:text-slate-500 italic py-2">No passwords generated yet...</li>
+            </ul>
+        </div>
+    </main>
+
+    <footer class="mt-8 text-center text-slate-400 text-sm">
+        <p>100% Client-Side. No data leaves your device.</p>
+    </footer>
+
+    <script>
+        // --- System Initialization ---
+        lucide.createIcons();
+
+        // --- DOM Elements ---
+        const els = {
+            passwordOutput: document.getElementById('passwordOutput'),
+            btnCopy: document.getElementById('btnCopy'),
+            btnRegenerate: document.getElementById('btnRegenerate'),
+            copyIcon: document.getElementById('copyIcon'),
+            checkIcon: document.getElementById('checkIcon'),
+            
+            strengthBar: document.getElementById('strengthBar'),
+            strengthLabel: document.getElementById('strengthLabel'),
+            
+            lengthSlider: document.getElementById('lengthSlider'),
+            lengthInput: document.getElementById('lengthInput'),
+            
+            chkUpper: document.getElementById('chkUpper'),
+            chkLower: document.getElementById('chkLower'),
+            chkNumbers: document.getElementById('chkNumbers'),
+            chkSymbols: document.getElementById('chkSymbols'),
+            
+            chkExcludeAmbiguous: document.getElementById('chkExcludeAmbiguous'),
+            chkExcludeDuplicates: document.getElementById('chkExcludeDuplicates'),
+            chkGuarantee: document.getElementById('chkGuarantee'),
+            duplicateWarning: document.getElementById('duplicateWarning'),
+            
+            charTypeChks: document.querySelectorAll('.char-type-chk'),
+            historyList: document.getElementById('historyList'),
+            toastContainer: document.getElementById('toastContainer'),
+            
+            themeToggle: document.getElementById('themeToggle')
+        };
+
+        // --- State ---
+        let passwordHistory = [];
+        const MAX_HISTORY = 5;
+
+        // Character Sets
+        const CHAR_SETS = {
+            upper: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+            lower: 'abcdefghijklmnopqrstuvwxyz',
+            numbers: '0123456789',
+            symbols: '!@#$%^&*()_+-=[]{}|;:,.<>?'
+        };
+        const AMBIGUOUS_CHARS = /[l1IO0]/g;
+
+        // --- Core Security & Crypto Functions ---
+        
+        /**
+         * Generates a cryptographically secure random integer between 0 and max-1.
+         * Uses rejection sampling to completely eliminate modulo bias.
+         */
+        function getSecureRandom(max) {
+            if (max <= 0) return 0;
+            const array = new Uint8Array(1);
+            const limit = 256 - (256 % max);
+            let randomValue;
+            do {
+                window.crypto.getRandomValues(array);
+                randomValue = array[0];
+            } while (randomValue >= limit); // Reject values that cause bias
+            return randomValue % max;
+        }
+
+        /**
+         * Cryptographically secure Fisher-Yates shuffle.
+         */
+        function secureShuffle(array) {
+            let currentIndex = array.length, randomIndex;
+            while (currentIndex !== 0) {
+                randomIndex = getSecureRandom(currentIndex);
+                currentIndex--;
+                [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+            }
+            return array;
+        }
+
+        // --- Password Generation Logic ---
+        
+        function generatePassword() {
+            const length = parseInt(els.lengthSlider.value, 10);
+            const useUpper = els.chkUpper.checked;
+            const useLower = els.chkLower.checked;
+            const useNumbers = els.chkNumbers.checked;
+            const useSymbols = els.chkSymbols.checked;
+            const excludeAmbiguous = els.chkExcludeAmbiguous.checked;
+            const excludeDuplicates = els.chkExcludeDuplicates.checked;
+            const guarantee = els.chkGuarantee.checked;
+
+            let activePools = [];
+            if (useUpper) activePools.push(CHAR_SETS.upper);
+            if (useLower) activePools.push(CHAR_SETS.lower);
+            if (useNumbers) activePools.push(CHAR_SETS.numbers);
+            if (useSymbols) activePools.push(CHAR_SETS.symbols);
+
+            if (excludeAmbiguous) {
+                activePools = activePools.map(pool => pool.replace(AMBIGUOUS_CHARS, ''));
+                // Filter out any pools that became completely empty due to exclusion 
+                // (highly unlikely with our standard sets, but good practice)
+                activePools = activePools.filter(pool => pool.length > 0);
+            }
+
+            if (activePools.length === 0) return;
+
+            let combinedPool = activePools.join('');
+            
+            // Handle duplicate exclusion limits
+            els.duplicateWarning.classList.add('hidden');
+            let actualLength = length;
+            if (excludeDuplicates && length > combinedPool.length) {
+                actualLength = combinedPool.length;
+                els.duplicateWarning.classList.remove('hidden');
+                els.duplicateWarning.textContent = `Length capped to ${actualLength} due to pool size.`;
+            }
+
+            let passwordChars = [];
+            let availableChars = combinedPool.split('');
+
+            // 1. Guarantee Phase
+            if (guarantee) {
+                activePools.forEach(pool => {
+                    if (passwordChars.length >= actualLength) return;
+                    
+                    // If excluding duplicates, pick from characters STILL available in this specific pool
+                    let poolAvail = excludeDuplicates 
+                        ? pool.split('').filter(c => availableChars.includes(c))
+                        : pool.split('');
+
+                    if (poolAvail.length > 0) {
+                        const char = poolAvail[getSecureRandom(poolAvail.length)];
+                        passwordChars.push(char);
+                        if (excludeDuplicates) {
+                            availableChars.splice(availableChars.indexOf(char), 1);
+                        }
+                    }
+                });
+            }
+
+            // 2. Fill Phase
+            const remainingLength = actualLength - passwordChars.length;
+            for (let i = 0; i < remainingLength; i++) {
+                if (excludeDuplicates) {
+                    if (availableChars.length === 0) break; // Failsafe
+                    const idx = getSecureRandom(availableChars.length);
+                    passwordChars.push(availableChars[idx]);
+                    availableChars.splice(idx, 1); // remove used char
+                } else {
+                    passwordChars.push(combinedPool[getSecureRandom(combinedPool.length)]);
+                }
+            }
+
+            // 3. Final Shuffle
+            passwordChars = secureShuffle(passwordChars);
+            const finalPassword = passwordChars.join('');
+
+            // 4. Update UI
+            els.passwordOutput.value = finalPassword;
+            updateStrength(finalPassword, combinedPool.length);
+            addToHistory(finalPassword);
+            
+            // Reset copy icon if it was checked
+            resetCopyButton();
+        }
+
+        // --- Strength Calculation ---
+        
+        function updateStrength(password, poolSize) {
+            // Calculate Shannon entropy: E = L * log2(R)
+            const entropy = password.length * Math.log2(poolSize);
+            
+            let percentage = 0;
+            let label = "";
+            let colorClass = "";
+
+            if (entropy < 35) {
+                label = "Weak";
+                percentage = 25;
+                colorClass = "bg-red-500";
+            } else if (entropy < 60) {
+                label = "Fair";
+                percentage = 50;
+                colorClass = "bg-amber-500";
+            } else if (entropy < 90) {
+                label = "Strong";
+                percentage = 75;
+                colorClass = "bg-emerald-500";
+            } else {
+                label = "Very Strong";
+                percentage = 100;
+                colorClass = "bg-brand-500";
+            }
+
+            // Update UI
+            els.strengthBar.style.width = `${percentage}%`;
+            els.strengthBar.className = `h-full strength-bar rounded-full ${colorClass}`;
+            els.strengthLabel.textContent = label;
+            
+            // Adjust label color
+            els.strengthLabel.className = `text-sm font-bold uppercase tracking-wider w-24 text-right ${colorClass.replace('bg-', 'text-')}`;
+        }
+
+        // --- History Management ---
+
+        function addToHistory(password) {
+            // Prevent adding immediate duplicates to history
+            if (passwordHistory.length > 0 && passwordHistory[0] === password) return;
+
+            passwordHistory.unshift(password);
+            if (passwordHistory.length > MAX_HISTORY) {
+                passwordHistory.pop();
+            }
+            renderHistory();
+        }
+
+        function renderHistory() {
+            els.historyList.innerHTML = '';
+            
+            if (passwordHistory.length === 0) {
+                els.historyList.innerHTML = '<li class="text-sm text-slate-400 italic py-2">No passwords generated yet...</li>';
+                return;
+            }
+
+            passwordHistory.forEach((pass, index) => {
+                const li = document.createElement('li');
+                li.className = "flex items-center justify-between p-2 hover:bg-white dark:hover:bg-slate-900 rounded-lg transition border border-transparent hover:border-slate-200 dark:hover:border-slate-700";
+                
+                const span = document.createElement('span');
+                span.className = "font-mono text-sm text-slate-700 dark:text-slate-300 truncate pr-4 select-all";
+                span.textContent = pass;
+
+                const btn = document.createElement('button');
+                btn.className = "p-1.5 text-slate-400 hover:text-brand-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition tooltip";
+                btn.title = "Copy";
+                btn.innerHTML = `<i data-lucide="copy" class="w-4 h-4"></i>`;
+                
+                btn.onclick = () => copyToClipboard(pass, btn);
+
+                li.appendChild(span);
+                li.appendChild(btn);
+                els.historyList.appendChild(li);
+            });
+            
+            lucide.createIcons();
+        }
+
+        // --- UI Interactions & Helpers ---
+
+        function syncLength(val) {
+            // Constrain
+            val = Math.max(4, Math.min(64, val));
+            els.lengthSlider.value = val;
+            els.lengthInput.value = val;
+            
+            // Update slider track gradient
+            const percent = ((val - 4) / (64 - 4)) * 100;
+            els.lengthSlider.style.setProperty('--track-bg', `linear-gradient(to right, #2563eb ${percent}%, var(--track-base, #cbd5e1) ${percent}%)`);
+            
+            // Set base track color based on theme
+            const isDark = document.documentElement.classList.contains('dark');
+            els.lengthSlider.style.setProperty('--track-base', isDark ? '#334155' : '#cbd5e1');
+        }
+
+        async function copyToClipboard(text, btnElement = null) {
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    // Fallback for non-secure context / older browsers
+                    const textArea = document.createElement("textarea");
+                    textArea.value = text;
+                    textArea.style.position = "absolute";
+                    textArea.style.left = "-999999px";
+                    document.body.prepend(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    textArea.remove();
+                }
+
+                showToast("Copied to clipboard!");
+
+                // Main button feedback
+                if (!btnElement || btnElement === els.btnCopy) {
+                    els.copyIcon.classList.add('hidden');
+                    els.checkIcon.classList.remove('hidden');
+                    els.btnCopy.classList.remove('bg-brand-500', 'hover:bg-brand-600');
+                    els.btnCopy.classList.add('bg-emerald-500', 'hover:bg-emerald-600');
+                    
+                    setTimeout(resetCopyButton, 2000);
+                } else {
+                    // History button feedback
+                    const originalHTML = btnElement.innerHTML;
+                    btnElement.innerHTML = `<i data-lucide="check" class="w-4 h-4 text-emerald-500"></i>`;
+                    lucide.createIcons();
+                    setTimeout(() => {
+                        btnElement.innerHTML = originalHTML;
+                        lucide.createIcons();
+                    }, 2000);
+                }
+            } catch (err) {
+                console.error("Failed to copy", err);
+                showToast("Failed to copy!", "error");
+            }
+        }
+
+        function resetCopyButton() {
+            els.checkIcon.classList.add('hidden');
+            els.copyIcon.classList.remove('hidden');
+            els.btnCopy.classList.remove('bg-emerald-500', 'hover:bg-emerald-600');
+            els.btnCopy.classList.add('bg-brand-500', 'hover:bg-brand-600');
+        }
+
+        function showToast(message, type = "success") {
+            const toast = document.createElement('div');
+            toast.className = `toast-enter flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium ${
+                type === 'success' 
+                ? 'bg-white dark:bg-slate-800 border-emerald-100 dark:border-emerald-900 text-emerald-700 dark:text-emerald-400' 
+                : 'bg-white dark:bg-slate-800 border-red-100 dark:border-red-900 text-red-700 dark:text-red-400'
+            }`;
+            
+            const icon = type === 'success' ? 'check-circle-2' : 'alert-circle';
+            toast.innerHTML = `
+                <i data-lucide="${icon}" class="w-5 h-5"></i>
+                <span>${message}</span>
+            `;
+            
+            els.toastContainer.appendChild(toast);
+            lucide.createIcons();
+
+            // Trigger animation
+            requestAnimationFrame(() => {
+                toast.classList.remove('toast-enter');
+                toast.classList.add('toast-enter-active');
+            });
+
+            setTimeout(() => {
+                toast.classList.remove('toast-enter-active');
+                toast.classList.add('toast-exit-active');
+                toast.addEventListener('transitionend', () => toast.remove());
+            }, 2500);
+        }
+
+        // --- Event Listeners ---
+
+        // Length Sync
+        els.lengthSlider.addEventListener('input', (e) => {
+            syncLength(e.target.value);
+            generatePassword();
+        });
+        els.lengthInput.addEventListener('change', (e) => {
+            syncLength(e.target.value);
+            generatePassword();
+        });
+
+        // Enforce at least one character type selected
+        els.charTypeChks.forEach(chk => {
+            chk.addEventListener('change', (e) => {
+                const checkedCount = Array.from(els.charTypeChks).filter(c => c.checked).length;
+                if (checkedCount === 0) {
+                    e.preventDefault();
+                    e.target.checked = true; // Re-check
+                    
+                    // Visual Shake Feedback
+                    e.target.classList.add('checkbox-shake');
+                    showToast("Must select at least one character type.", "error");
+                    setTimeout(() => e.target.classList.remove('checkbox-shake'), 400);
+                } else {
+                    generatePassword();
+                }
+            });
+        });
+
+        // Other Setting Toggles
+        [els.chkExcludeAmbiguous, els.chkExcludeDuplicates, els.chkGuarantee].forEach(chk => {
+            chk.addEventListener('change', generatePassword);
+        });
+
+        // Buttons
+        els.btnRegenerate.addEventListener('click', () => {
+            els.btnRegenerate.firstElementChild.classList.add('animate-spin');
+            setTimeout(() => els.btnRegenerate.firstElementChild.classList.remove('animate-spin'), 300);
+            generatePassword();
+        });
+
+        els.btnCopy.addEventListener('click', () => copyToClipboard(els.passwordOutput.value));
+
+        // Theme Toggling
+        function initTheme() {
+            if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+            // Update slider track color for theme
+            syncLength(els.lengthSlider.value);
+        }
+
+        els.themeToggle.addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+            if (document.documentElement.classList.contains('dark')) {
+                localStorage.theme = 'dark';
+            } else {
+                localStorage.theme = 'light';
+            }
+            syncLength(els.lengthSlider.value); // refresh slider coloring
+        });
+
+        // Listen for system theme changes
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+            if (!('theme' in localStorage)) {
+                if (e.matches) document.documentElement.classList.add('dark');
+                else document.documentElement.classList.remove('dark');
+                syncLength(els.lengthSlider.value);
+            }
+        });
+
+        // --- Boot ---
+        initTheme();
+        syncLength(16);
+        generatePassword();
+
+    </script>
+</body>
+</html>
